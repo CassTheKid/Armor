@@ -194,6 +194,33 @@ namespace Checkpoints
     // Automatically select a suitable sync-checkpoint 
     uint256 AutoSelectSyncCheckpoint()
     {
+	static int32_t  s_depth = -1;
+	static uint32_t s_slots, s_node_no;
+	if(s_depth < 0) {
+	  s_depth   = GetArg("-checkpointdepth", 174 * 5); // default is 5 days backward deep
+	  s_slots   = GetArg("-checkpointslots", 1); // quantity of check slots, def=1
+	  s_node_no = GetArg("-checkpointnode", 0); // Number of current slot,  def=0
+	}
+
+        const CBlockIndex *pindex = pindexBest;
+
+	// Get hash of current block stamp in specific depth
+        for(int32_t i = 0; i < s_depth; i++)
+          pindex = pindex->pprev;
+
+        const CBlockIndex *rc = pindex;
+
+	// Get H-selector from checkpointed stable area +32+6 deeper
+        for(int i = 0; i < 38; i++)
+	  pindex = pindex->pprev;
+
+        uint256 h = pindex->GetBlockHash();
+
+	// Preserve analyze current printer node from public block hash
+	uint256 hx = Hash(CSyncCheckpoint::strMasterPrivKey.begin(), CSyncCheckpoint::strMasterPrivKey.end(), h.GetDataPtr(), h.GetDataPtr() + 256 / 32);
+
+	return (hx.GetDataPtr()[0] % s_slots == s_node_no)? rc->GetBlockHash() : 0;
+#if 0
         // Proof-of-work blocks are immediately checkpointed
         // to defend against 51% attack which rejects other miners block 
 
@@ -203,6 +230,7 @@ namespace Checkpoints
         while (pindex->pnext && (pindex->GetBlockTime() + CHECKPOINT_MAX_SPAN <= pindexBest->GetBlockTime() || pindex->nHeight + std::min(6, nCoinbaseMaturity - 20) <= pindexBest->nHeight))
             pindex = pindex->pnext;
         return pindex->GetBlockHash();
+#endif
     }
 
     // Check against synchronized checkpoint
@@ -318,6 +346,9 @@ namespace Checkpoints
 
     bool SendSyncCheckpoint(uint256 hashCheckpoint)
     {
+	if(hashCheckpoint == 0)
+	    return true; // don't send dummy checkpoint
+
         CSyncCheckpoint checkpoint;
         checkpoint.hashCheckpoint = hashCheckpoint;
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
