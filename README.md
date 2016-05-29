@@ -1,4 +1,4 @@
-Emercoin integration/staging tree
+Armor integration/staging tree
 ================================
 
 http://emercoin.com
